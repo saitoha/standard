@@ -3,55 +3,57 @@
 #include <string.h>
 
 #include "events.h"
+#include "hash-table.h"
 
 
 #define EVENT_HASH_BITS 8
 
 
-static struct event_handler_list
-{
-    struct event_handler_list *next;
-    event_handler_t handler;
-} *event_handlers[1 << EVENT_HASH_BITS];
+static hash_table_t *event_handlers;
 
 
-static int hash_event(const event_t *event)
+static unsigned eh_hash(const void *ehptr)
 {
-    return (event->type + event->code) & ((1 << EVENT_HASH_BITS) - 1);
+    const event_t *eh = ehptr;
+    return eh->type + eh->code;
+}
+
+static bool eh_compare(const void *entry, const void *compare)
+{
+    const event_t *ee = entry, *ec = compare;
+    return (ee->code == ec->code) && (ee->type == ec->type);
+}
+
+
+void init_events(void)
+{
+    event_handlers = create_hash_table(EVENT_HASH_BITS, &eh_hash, &eh_compare, &free);
 }
 
 
 bool trigger_event(event_t event)
 {
-    int hash = hash_event(&event);
-
-    for (struct event_handler_list *ehl = event_handlers[hash]; ehl != NULL; ehl = ehl->next)
-        if ((ehl->handler.event.code == event.code) && (ehl->handler.event.type == event.type))
-            return ehl->handler.handler(&event, ehl->handler.info);
-
-    return false;
+    event_handler_t *handler = hash_table_lookup(event_handlers, &event);
+    return handler && handler->handler(&event, handler->info);
 }
 
 
 void register_event_handler(event_t event, bool (*handler)(const event_t *event, void *info), void *info)
 {
-    int hash = hash_event(&event);
+    event_handler_t *existing = hash_table_lookup(event_handlers, &event);
 
-    for (struct event_handler_list *ehl = event_handlers[hash]; ehl != NULL; ehl = ehl->next)
+    if (existing)
     {
-        if ((ehl->handler.event.code == event.code) && (ehl->handler.event.type == event.type))
-        {
-            ehl->handler.handler = handler;
-            ehl->handler.info = info;
-            return;
-        }
+        existing->handler = handler;
+        existing->info = info;
     }
+    else
+    {
+        event_handler_t *neh = malloc(sizeof(*neh));
+        memcpy(&neh->event, &event, sizeof(event));
+        neh->handler = handler;
+        neh->info = info;
 
-    struct event_handler_list *ehl = malloc(sizeof(*ehl));
-    memcpy(&ehl->handler.event, &event, sizeof(event));
-    ehl->handler.handler = handler;
-    ehl->handler.info = info;
-
-    ehl->next = event_handlers[hash];
-    event_handlers[hash] = ehl;
+        hash_table_insert(event_handlers, neh);
+    }
 }

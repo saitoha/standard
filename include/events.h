@@ -37,6 +37,8 @@ typedef struct event_handler
 } event_handler_t;
 
 
+void init_events(void);
+
 bool trigger_event(event_t event);
 void register_event_handler(event_t event, bool (*handler)(const event_t *event, void *info), void *info);
 

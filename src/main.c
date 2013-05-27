@@ -6,6 +6,7 @@
 #include "buffer.h"
 #include "config.h"
 #include "editor.h"
+#include "events.h"
 #include "term.h"
 
 
@@ -42,6 +43,8 @@ int main(int argc, char *argv[])
         }
     }
 
+
+    init_events();
 
     term_init();
 
